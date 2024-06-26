@@ -418,9 +418,25 @@ LogicalResult getStaticDims(Operation *op,
   for (int i = 0; i < sizes.size(); ++i)
     staticSizes[staticSizes.size() - sizes.size() + i] =
         getConstantIntValue(sizes[i]).value();
+  // TODO(avarma): Currently just a workaround for bf16 - so better to check the
+  // element type as well.
   for (int i = 0; i < strides.size() - 1; ++i)
     staticStrides[staticStrides.size() - (strides.size() - 1) + i] =
         getConstantIntValue(strides[i]).value();
+  // TODO(avarma): Currently just a workaround for bf16 - so better to check the
+  // element type as well.
+  for (int i = 1; i < staticStrides.size(); i++) {
+    if (staticStrides[i] > 1) {
+      staticStrides[i] /= 2;
+    } else {
+      if (staticSizes[i] != 1) staticSizes[i] /= 2;
+      if (staticOffsets[i] != 1) staticOffsets[i] /= 2;
+    }
+  }
+  // Last stride is always 1 - since we're anyway choosing array of size 3 here
+  // and letting the implicit last dimension be assumed 1 by the AIE dialect.
+  if (staticSizes[3] != 1) staticSizes[3] /= 2;
+  if (staticOffsets[3] != 1) staticOffsets[3] /= 2;
   return success();
 }
 
@@ -726,7 +742,14 @@ LogicalResult lowerToAIE(ModuleOp moduleOp) {
       auto inputType = cast<MemRefType>(op.getType());
       if (inputType.getElementTypeBitWidth() != 32) {
         auto inputShapeArr = inputType.getShape();
-        inputType = MemRefType::get(inputShapeArr, rewriter.getI32Type(),
+        // TODO(avarma): Currently we assume 2D inputs for Matmul.
+        assert((inputShapeArr.size() == 2) && "expected only 2D inputs");
+        assert((inputShapeArr[1] % 2 == 0) &&
+               "expected last dimension to be multiple of 2");
+        SmallVector<int64_t> inputShape;
+        for (int64_t shape : inputShapeArr) inputShape.push_back(shape);
+        inputShape[1] /= 2;
+        inputType = MemRefType::get(inputShape, rewriter.getI32Type(),
                                     MemRefLayoutAttrInterface{});
       }
       inputTypes.push_back(inputType);
