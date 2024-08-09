@@ -57,6 +57,7 @@ iree_lit_test_suite(
     "pad.mlir"
     "peel_for_loop.mlir"
     "propagate_data_layout.mlir"
+    "split_buffers.mlir"
     "tile_and_fuse_using_scf_for.mlir"
     "tile_and_fuse_using_scf_forall.mlir"
     "tile_copy_using_scf_for.mlir"
