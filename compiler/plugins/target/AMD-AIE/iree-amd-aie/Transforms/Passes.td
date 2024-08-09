@@ -404,7 +404,7 @@ def AMDAIEPropagateDataLayout :
 
 def AMDAIESplitBuffers :
   Pass<"iree-amdaie-split-buffers", "ModuleOp"> {
-  let summary = "Split buffers.";
+  let summary = "Pass to split L2 buffers to share inputs of Matmul and Elementwise operations.";
   let constructor = "mlir::iree_compiler::AMDAIE::createAMDAIESplitBuffersPass()";
 }
 
