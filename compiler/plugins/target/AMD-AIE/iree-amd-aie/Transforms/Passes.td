@@ -402,6 +402,12 @@ def AMDAIEPropagateDataLayout :
   let constructor = "mlir::iree_compiler::AMDAIE::createAMDAIEPropagateDataLayoutPass()";
 }
 
+def AMDAIESplitBuffers :
+  Pass<"iree-amdaie-split-buffers", "ModuleOp"> {
+  let summary = "Split buffers.";
+  let constructor = "mlir::iree_compiler::AMDAIE::createAMDAIESplitBuffersPass()";
+}
+
 def AMDAIETile :
     InterfacePass<"iree-amdaie-tile", "mlir::FunctionOpInterface"> {
   let summary = "Pass to tile TilingInterface operations.";
