@@ -430,10 +430,10 @@ def AMDAIEPropagateDataLayout :
   let constructor = "mlir::iree_compiler::AMDAIE::createAMDAIEPropagateDataLayoutPass()";
 }
 
-def AMDAIESplitBuffers :
-  Pass<"iree-amdaie-split-buffers", "ModuleOp"> {
+def AMDAIESplitLogicalObjectFifos :
+  Pass<"iree-amdaie-split-logical-objectfifos", "ModuleOp"> {
   let summary = "Pass to split L2 buffers to share inputs of Matmul and Elementwise operations.";
-  let constructor = "mlir::iree_compiler::AMDAIE::createAMDAIESplitBuffersPass()";
+  let constructor = "mlir::iree_compiler::AMDAIE::createAMDAIESplitLogicalObjectFifosPass()";
 }
 
 def AMDAIETile :
