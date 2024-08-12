@@ -97,6 +97,9 @@ std::unique_ptr<Pass> createAMDAIEVectorizationPass();
 /// Create pass to invoke several cleanup and canonicalization patterns.
 std::unique_ptr<Pass> createAMDAIECleanupPass();
 
+/// Create pass to combine dma npu.
+std::unique_ptr<Pass> createAMDAIECombineDmaNpuPass();
+
 /// Create pass to combine strided ops within the same block if access patterns
 /// are compatible.
 std::unique_ptr<Pass> createAMDAIECombineStridedOpsPass();

@@ -50,6 +50,7 @@ iree_cc_library(
     "AMDAIEBufferizeToAllocation.cpp"
     "AMDAIECanonicalizeDma.cpp"
     "AMDAIECanonicalizeDoublyStridedOp.cpp"
+    "AMDAIECombineDmaNpu.cpp"
     "AMDAIECombineStridedOps.cpp"
     "AMDAIEControlCodeLoopUnroll.cpp"
     "AMDAIEConvertCoreForallToFor.cpp"

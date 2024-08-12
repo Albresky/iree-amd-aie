@@ -84,6 +84,12 @@ def AMDAIECleanup :
       "mlir::iree_compiler::AMDAIE::createAMDAIECleanupPass()";
 }
 
+def AMDAIECombineDmaNpu :
+  Pass<"iree-amdaie-combine-dma-npu", "ModuleOp"> {
+  let summary = "Pass to combine DMA NPU.";
+  let constructor = "mlir::iree_compiler::AMDAIE::createAMDAIECombineDmaNpuPass()";
+}
+
 def AMDAIECombineStridedOps :
     Pass<"iree-amdaie-combine-strided-ops", ""> {
   let summary = "Combine strided ops in same block if access patterns are compatible.";
