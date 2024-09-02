@@ -211,6 +211,9 @@ std::unique_ptr<Pass> createAMDAIEPadPass(AMDAIEPadOptions options = {});
 std::unique_ptr<Pass> createAMDAIEPeelForLoopPass(
     AMDAIEPeelForLoopOptions options = {});
 
+/// Create a pass to combine logicalobjectfifos for connection reuse.
+std::unique_ptr<Pass> createAMDAIECombineLogicalObjFifosForConnectionReusePass();
+
 /// Create a pass to split logicalobjectfifos for connection reuse.
 std::unique_ptr<Pass> createAMDAIESplitLogicalObjFifosForConnectionReusePass();
 
