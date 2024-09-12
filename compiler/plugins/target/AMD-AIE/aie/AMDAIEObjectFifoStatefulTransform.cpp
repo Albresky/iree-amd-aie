@@ -668,6 +668,30 @@ LogicalResult createTileDMAs(
   return success();
 }
 
+static FailureOr<TemporaryBufferAndLock>
+createBufferAndLocksForTemporaryAllocOps(OpBuilder &builder, DeviceOp device,
+                                         AllocOp allocOp, CoreOp coreOp,
+                                         unsigned index) {
+  OpBuilder::InsertionGuard g(builder);
+  AMDAIEDeviceModel deviceModel =
+      getDeviceModel(static_cast<AMDAIEDevice>(device.getDevice()));
+  TileOp tileOp = coreOp.getTileOp();
+  // Reset opbuilder location to after the last tile declaration
+  // auto tiles = device.getBody()->getOps<TileOp>();
+  // assert(!tiles.empty() && "no tiles in device");
+  // builder.setInsertionPointAfter(*std::prev(tiles.end(), 1));
+  auto bufferType = cast<MemRefType>(allocOp.getType());
+  auto bufferOp = builder.create<BufferOp>(
+      builder.getUnknownLoc(), bufferType, tileOp,
+      builder.getStringAttr("temp_buff_" + std::to_string(index)),
+      /*address*/ nullptr,
+      /*mem_bank*/ nullptr);
+  std::pair<LockOp, LockOp> lockPair =
+      createLockPair(builder, deviceModel, tileOp, /*depth=*/1,
+                     "temp_buffer" + std::to_string(index),
+                     /*index=*/0);
+}
+
 namespace mlir::iree_compiler::AMDAIE {
 struct AMDAIEObjectFifoStatefulTransformPass : mlir::OperationPass<DeviceOp> {
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(
@@ -720,6 +744,73 @@ struct AMDAIEObjectFifoStatefulTransformPass : mlir::OperationPass<DeviceOp> {
         return signalPassFailure();
       }
     }
+
+    // Handle temporary buffers.
+    // Step 1. Get all buffers within a CoreOp.
+    SmallVector<memref::AllocOp> allocOps;
+    for (CoreOp coreOp : device.getOps<CoreOp>()) {
+      coreOp.walk([&](Operation *op) {
+        if (auto allocOp = dyn_cast<memref::AllocOp>(op)) {
+          allocOps.push_back(allocOp);
+        } else if (auto deallocOp = dyn_cast<memref::DeallocOp>(op)) {
+          deallocOps.push_back(deallocOp);
+        }
+      });
+      // Each coreOp is performing the same set of instructions twice. So, if we
+      // have 'N' no. of AllocOps fetched, the first 'N/2' AllocOps would be the
+      // unique set that we need to target.
+      // Eg:
+      //      %a1 = alloc()
+      //      %b1 = alloc()
+      //      <DISPATCH INSTRUCTIONS>
+      //      deaalloc(%a1)
+      //      dealloc(%b1)
+      //      %a2 = alloc()
+      //      %b2 = alloc()
+      //      <DISPATCH INSTRUCTIONS>
+      //      deaalloc(%a2)
+      //      dealloc(%b2)
+      // TODO(avarma): This is quite hacky but don't worry - I'll revisit this.
+      //               For now, I'll go ahead with this logic to get at least
+      //               something "working".
+      //
+      // Step 2. Traverse n/2 allocOps and create an aie.buffer and locks for
+      // them.
+      unsigned numOfUniqueAllocOps = allocOps.size() / 2;
+      for (unsigned i = 0, n = allocOps.size(); i < n; i++) {
+        // We will later create a RELEASE aie.use_lock for each dealloc ops
+        // later.
+        if (i < numOfUniqueAllocOps) {
+          FailureOr<TemporaryBufferAndLock> temporaryBufferAndLock =
+              createBufferAndLocksForTemporaryAllocOps(builder, allocOps[i],
+                                                       coreOp);
+          if (failed(temporaryBufferAndLock)) {
+            return signalPassFailure();
+          }
+          temporaryBufferAndLocks.push_back(temporaryBufferAndLock.value());
+        }
+        TemporaryBufferAndLock tempBufferAndLock;
+        tempBufferAndLock = temporaryBufferAndLocks[i % numOfUniqueAllocOps];
+        // The temporary buffer can be used as a Produce-d or a Consume-d
+        // buffer. For now I'll precede both of these with an ACQUIRE. Else it's
+        // supposed to follow a similar structure like that of ObjectFifo being
+        // Prdoduce-d or Consume-d.
+        // TODO(avarma): Address the last sentence right above.
+        //
+        // Create ACQUISTION of lock via aie.use_lock.
+        rewriter.create<UseLockOp>(....);
+        // Replace use of this AllocOp with the aie.buffer.
+        allocOps[i].replaceAllUsesWith(tempBufferAndLock.buffer);
+
+        // For corresponding DeallocOps, we'll do the following :-
+        // Create RELEASE of lock via aie.use_lock.
+        // Remove the DeallocOp.
+        rewriter.eraseOp(deallocOps[i]);
+      }
+    }
+    // for (AllocOp allocOp : device.getOps<AllocOp>()) {
+    //   if (failed(createBuffers))
+    // }
 
     for (ObjectFifoCreateOp createOp : device.getOps<ObjectFifoCreateOp>()) {
       if (failed(createTileDMAs(builder, device, createOp, resourceMap,
