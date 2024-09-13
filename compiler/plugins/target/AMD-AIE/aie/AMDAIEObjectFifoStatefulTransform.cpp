@@ -668,28 +668,24 @@ LogicalResult createTileDMAs(
   return success();
 }
 
-static FailureOr<TemporaryBufferAndLock>
-createBufferAndLocksForTemporaryAllocOps(OpBuilder &builder, DeviceOp device,
-                                         AllocOp allocOp, CoreOp coreOp,
-                                         unsigned index) {
+static std::optional<BufferOp> createBufferForTemporaryAllocOp(
+    OpBuilder &builder, DeviceOp device, memref::AllocOp allocOp, CoreOp coreOp,
+    unsigned index) {
   OpBuilder::InsertionGuard g(builder);
-  AMDAIEDeviceModel deviceModel =
-      getDeviceModel(static_cast<AMDAIEDevice>(device.getDevice()));
   TileOp tileOp = coreOp.getTileOp();
-  // Reset opbuilder location to after the last tile declaration
-  // auto tiles = device.getBody()->getOps<TileOp>();
-  // assert(!tiles.empty() && "no tiles in device");
-  // builder.setInsertionPointAfter(*std::prev(tiles.end(), 1));
+  // Reset Opbuilder location to after last tile's declaration.
+  auto tiles = device.getBody()->getOps<TileOp>();
+  assert(!tiles.empty() && "no tiles in device");
+  builder.setInsertionPointAfter(*std::prev(tiles.end(), 1));
   auto bufferType = cast<MemRefType>(allocOp.getType());
   auto bufferOp = builder.create<BufferOp>(
       builder.getUnknownLoc(), bufferType, tileOp,
-      builder.getStringAttr("temp_buff_" + std::to_string(index)),
+      builder.getStringAttr("core_" + std::to_string(tileOp.getCol()) + "_" +
+                            std::to_string(tileOp.getRow()) + "_temp_buff_" +
+                            std::to_string(index)),
       /*address*/ nullptr,
       /*mem_bank*/ nullptr);
-  std::pair<LockOp, LockOp> lockPair =
-      createLockPair(builder, deviceModel, tileOp, /*depth=*/1,
-                     "temp_buffer" + std::to_string(index),
-                     /*index=*/0);
+  return bufferOp;
 }
 
 namespace mlir::iree_compiler::AMDAIE {
@@ -746,14 +742,17 @@ struct AMDAIEObjectFifoStatefulTransformPass : mlir::OperationPass<DeviceOp> {
     }
 
     // Handle temporary buffers.
+    IRRewriter rewriter(&getContext());
     // Step 1. Get all buffers within a CoreOp.
-    SmallVector<memref::AllocOp> allocOps;
+    // SmallVector<Operation*> toBeErased;
     for (CoreOp coreOp : device.getOps<CoreOp>()) {
+      SmallVector<memref::AllocOp> allocOps;
       coreOp.walk([&](Operation *op) {
         if (auto allocOp = dyn_cast<memref::AllocOp>(op)) {
           allocOps.push_back(allocOp);
+          // toBeErased.push_back(allocOp);
         } else if (auto deallocOp = dyn_cast<memref::DeallocOp>(op)) {
-          deallocOps.push_back(deallocOp);
+          // toBeErased.push_back(deallocOp);
         }
       });
       // Each coreOp is performing the same set of instructions twice. So, if we
@@ -772,45 +771,29 @@ struct AMDAIEObjectFifoStatefulTransformPass : mlir::OperationPass<DeviceOp> {
       //      dealloc(%b2)
       // TODO(avarma): This is quite hacky but don't worry - I'll revisit this.
       //               For now, I'll go ahead with this logic to get at least
-      //               something "working".
+      //               something "working". But if the above case is ALWAYS
+      //               true, this doesn't sound too bad a solution to save
+      //               buffers being allocated.
       //
-      // Step 2. Traverse n/2 allocOps and create an aie.buffer and locks for
-      // them.
+      // Step 2. Traverse n/2 allocOps and create an aie.buffer for them.
       unsigned numOfUniqueAllocOps = allocOps.size() / 2;
+      SmallVector<BufferOp> temporaryBuffers;
+      unsigned tempBufferIndex = 0;
       for (unsigned i = 0, n = allocOps.size(); i < n; i++) {
-        // We will later create a RELEASE aie.use_lock for each dealloc ops
-        // later.
         if (i < numOfUniqueAllocOps) {
-          FailureOr<TemporaryBufferAndLock> temporaryBufferAndLock =
-              createBufferAndLocksForTemporaryAllocOps(builder, allocOps[i],
-                                                       coreOp);
-          if (failed(temporaryBufferAndLock)) {
+          std::optional<BufferOp> temporaryBuffer =
+              createBufferForTemporaryAllocOp(builder, device, allocOps[i],
+                                              coreOp, tempBufferIndex++);
+          if (!temporaryBuffer) {
             return signalPassFailure();
           }
-          temporaryBufferAndLocks.push_back(temporaryBufferAndLock.value());
+          temporaryBuffers.push_back(*temporaryBuffer);
         }
-        TemporaryBufferAndLock tempBufferAndLock;
-        tempBufferAndLock = temporaryBufferAndLocks[i % numOfUniqueAllocOps];
-        // The temporary buffer can be used as a Produce-d or a Consume-d
-        // buffer. For now I'll precede both of these with an ACQUIRE. Else it's
-        // supposed to follow a similar structure like that of ObjectFifo being
-        // Prdoduce-d or Consume-d.
-        // TODO(avarma): Address the last sentence right above.
-        //
-        // Create ACQUISTION of lock via aie.use_lock.
-        rewriter.create<UseLockOp>(....);
-        // Replace use of this AllocOp with the aie.buffer.
-        allocOps[i].replaceAllUsesWith(tempBufferAndLock.buffer);
-
-        // For corresponding DeallocOps, we'll do the following :-
-        // Create RELEASE of lock via aie.use_lock.
-        // Remove the DeallocOp.
-        rewriter.eraseOp(deallocOps[i]);
+        BufferOp tempBuffer;
+        tempBuffer = temporaryBuffers[i % numOfUniqueAllocOps];
+        allocOps[i].replaceAllUsesWith(tempBuffer.getResult());
       }
     }
-    // for (AllocOp allocOp : device.getOps<AllocOp>()) {
-    //   if (failed(createBuffers))
-    // }
 
     for (ObjectFifoCreateOp createOp : device.getOps<ObjectFifoCreateOp>()) {
       if (failed(createTileDMAs(builder, device, createOp, resourceMap,
@@ -863,10 +846,11 @@ struct AMDAIEObjectFifoStatefulTransformPass : mlir::OperationPass<DeviceOp> {
     }
 
     // Remove old ops
-    IRRewriter rewriter(&getContext());
+    // IRRewriter rewriter(&getContext());
     device.walk([&](Operation *op) {
       if (isa<ObjectFifoCreateOp, ObjectFifoLinkOp, ObjectFifoAcquireOp,
-              ObjectFifoSubviewAccessOp, ObjectFifoReleaseOp>(op)) {
+              ObjectFifoSubviewAccessOp, ObjectFifoReleaseOp, memref::AllocOp,
+              memref::DeallocOp>(op)) {
         op->dropAllUses();
         rewriter.eraseOp(op);
       }
