@@ -4,10 +4,13 @@
 // See https://llvm.org/LICENSE.txt for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
+#include "iree-amd-aie/Transforms/AMDAIEUtils.h"
 #include "iree-amd-aie/Transforms/Passes.h"
 #include "llvm/ADT/STLExtras.h"
+#include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Linalg/Transforms/Transforms.h"
-#include "iree-amd-aie/Transforms/AMDAIEUtils.h"
+#include "mlir/Dialect/SCF/Transforms/TileUsingInterface.h"
+#include "mlir/IR/Iterators.h"
 
 namespace mlir::iree_compiler::AMDAIE {
 
@@ -53,6 +56,11 @@ class AMDAIEInsertLoopsForVectorizationPass
     assert(numIterators >= 3 && "expected at least 3 iterators here");
 
     SmallVector<int64_t> tileSizes(numIterators, 1);
+    llvm::outs() << "numIterators = " << numIterators << "\n";
+    llvm::outs().flush();
+    tileSizes[2] = 0;
+    tileSizes[5] = 0;
+    // tileSizes[numIterators - 5] = 0;
     tileSizes[numIterators - 3] = 0;
     tileSizes[numIterators - 2] = 0;
     tileSizes[numIterators - 1] = 0;
@@ -144,6 +152,71 @@ class AMDAIEInsertLoopsForVectorizationPass
     operation->walk([&](linalg::GenericOp genericOp) {
       (void)maybeRewrite(genericOp, rewriter);
     });
+
+    // llvm::outs()<<operation<<"\n\n";
+    // llvm::outs().flush();
+    /////////////////////////
+    // funcOp->walk<WalkOrder::PostOrder, ReverseIterator>([&](linalg::LinalgOp
+    // op) {
+    //   if (isMatmulProducerOfElementwise(op)) {
+    //     // fuseDepth = 2;
+    //     return WalkResult::interrupt();
+    //   }
+    //   return WalkResult::advance();
+    // });
+    // Operation *scfLoopOp = nullptr;
+    // operation->walk<WalkOrder::PostOrder, ReverseIterator>(
+    //     [&](LoopLikeOpInterface op) {
+    //       if (isa<scf::ForOp>(op)) {
+    //         scfLoopOp = op;
+    //         return WalkResult::interrupt();
+    //       }
+    //       return WalkResult::advance();
+    //     });
+
+    // if (!scfLoopOp) {
+    //   // LLVM_DEBUG(llvm::dbgs()
+    //   //            << "There is no scf.for/forall loop to fuse with\n");
+    //   return;
+    // }
+
+    // // Search the compute op and its consumer slices.
+    // linalg::LinalgOp linalgOp;
+    // scfLoopOp->walk<WalkOrder::PostOrder, ReverseIterator>(
+    //     [&](linalg::LinalgOp op) {
+    //       linalgOp = op;
+    //       return WalkResult::interrupt();
+    //     });
+
+    // if (!linalgOp) {
+    //   // LLVM_DEBUG(llvm::dbgs() << "Could not find any compute op\n");
+    //   return;
+    // }
+
+    // Value::user_range users = linalgOp->getResult(0).getUsers();
+    // if (!llvm::hasSingleElement(users)) {
+    //   linalgOp->emitOpError("Expected only one user of the compute op");
+    //   return signalPassFailure();
+    // }
+
+    // Operation *terminatorStoreOp = *(users.begin());
+    // if (!(isa<tensor::InsertSliceOp, tensor::ParallelInsertSliceOp>(
+    //         terminatorStoreOp))) {
+    //   terminatorStoreOp->emitOpError(
+    //       "Expected either tensor.insert_slice OR
+    //       tensor.parallel_insert_slice " "to be the only user of the compute
+    //       op");
+    //   return signalPassFailure();
+    // }
+
+    // std::optional<scf::SCFFuseConsumerOfSliceResult> fusedConsumer =
+    //     scf::tileAndFuseConsumerOfSlice(rewriter, terminatorStoreOp);
+    // if (!fusedConsumer) {
+    //   terminatorStoreOp->emitOpError(
+    //       "Failed to fuse any consumer op into the producer");
+    //   return signalPassFailure();
+    // }
+    // fusedConsumer->origConsumerOperand->getOwner()->erase();
   }
 };
 
