@@ -19,6 +19,14 @@ namespace {
 class AMDAIEInsertLoopsForVectorizationPass
     : public impl::AMDAIEInsertLoopsForVectorizationBase<
           AMDAIEInsertLoopsForVectorizationPass> {
+ public:
+  AMDAIEInsertLoopsForVectorizationPass() = default;
+  AMDAIEInsertLoopsForVectorizationPass(
+      const AMDAIEInsertLoopsForVectorizationPass &pass) {}
+  AMDAIEInsertLoopsForVectorizationPass(
+      const AMDAIEInsertLoopsForVectorizationOptions &options)
+      : AMDAIEInsertLoopsForVectorizationBase(options) {}
+
  private:
   void getDependentDialects(DialectRegistry &registry) const override {
     registry.insert<linalg::LinalgDialect, scf::SCFDialect>();
@@ -50,17 +58,24 @@ class AMDAIEInsertLoopsForVectorizationPass
   // denotes tiling with smallest possible tile (size 1) and tile size '0'
   // denotes tiling with the largest possible tile (size equal to the
   // dimension size). The tile sizes we use are [1,1,...1,0,0,0].
-  static void rewrite(IRRewriter &rewriter, linalg::GenericOp genericOp) {
+  static void rewrite(IRRewriter &rewriter, linalg::GenericOp genericOp,
+                      bool tileParallelDims) {
     auto iteratorTypes = genericOp.getIteratorTypesArray();
     auto numIterators = iteratorTypes.size();
     assert(numIterators >= 3 && "expected at least 3 iterators here");
 
-    SmallVector<int64_t> tileSizes(numIterators, 1);
-    llvm::outs() << "numIterators = " << numIterators << "\n";
-    llvm::outs().flush();
-    tileSizes[2] = 0;
-    tileSizes[5] = 0;
-    // tileSizes[numIterators - 5] = 0;
+    SmallVector<int64_t> tileSizes;
+    if (tileParallelDims) {
+      SmallVector<int64_t> tempTileSizes(numIterators, 1);
+      tempTileSizes[2] = 0;
+      tempTileSizes[5] = 0;
+      tileSizes = tempTileSizes;
+    } else {
+      SmallVector<int64_t> tempTileSizes(numIterators, 0);
+      tempTileSizes[2] = 1;
+      tempTileSizes[5] = 1;
+      tileSizes = tempTileSizes;
+    }
     tileSizes[numIterators - 3] = 0;
     tileSizes[numIterators - 2] = 0;
     tileSizes[numIterators - 1] = 0;
@@ -72,8 +87,8 @@ class AMDAIEInsertLoopsForVectorizationPass
   }
 
   // Return success if the generic op is rewritten, failure otherwise.
-  LogicalResult maybeRewrite(linalg::GenericOp genericOp,
-                             IRRewriter &rewriter) {
+  LogicalResult maybeRewrite(linalg::GenericOp genericOp, IRRewriter &rewriter,
+                             bool tileParallelDims) {
     auto iteratorTypes = genericOp.getIteratorTypesArray();
     auto numIterators = iteratorTypes.size();
 
@@ -140,7 +155,7 @@ class AMDAIEInsertLoopsForVectorizationPass
       if (!isMatmul && !isMatmulTransposeB) return failure();
     }
 
-    rewrite(rewriter, genericOp);
+    rewrite(rewriter, genericOp, tileParallelDims);
     return success();
   }
 
@@ -150,80 +165,16 @@ class AMDAIEInsertLoopsForVectorizationPass
 
     IRRewriter rewriter(context);
     operation->walk([&](linalg::GenericOp genericOp) {
-      (void)maybeRewrite(genericOp, rewriter);
+      (void)maybeRewrite(genericOp, rewriter, tileParallelDims);
     });
-
-    // llvm::outs()<<operation<<"\n\n";
-    // llvm::outs().flush();
-    /////////////////////////
-    // funcOp->walk<WalkOrder::PostOrder, ReverseIterator>([&](linalg::LinalgOp
-    // op) {
-    //   if (isMatmulProducerOfElementwise(op)) {
-    //     // fuseDepth = 2;
-    //     return WalkResult::interrupt();
-    //   }
-    //   return WalkResult::advance();
-    // });
-    // Operation *scfLoopOp = nullptr;
-    // operation->walk<WalkOrder::PostOrder, ReverseIterator>(
-    //     [&](LoopLikeOpInterface op) {
-    //       if (isa<scf::ForOp>(op)) {
-    //         scfLoopOp = op;
-    //         return WalkResult::interrupt();
-    //       }
-    //       return WalkResult::advance();
-    //     });
-
-    // if (!scfLoopOp) {
-    //   // LLVM_DEBUG(llvm::dbgs()
-    //   //            << "There is no scf.for/forall loop to fuse with\n");
-    //   return;
-    // }
-
-    // // Search the compute op and its consumer slices.
-    // linalg::LinalgOp linalgOp;
-    // scfLoopOp->walk<WalkOrder::PostOrder, ReverseIterator>(
-    //     [&](linalg::LinalgOp op) {
-    //       linalgOp = op;
-    //       return WalkResult::interrupt();
-    //     });
-
-    // if (!linalgOp) {
-    //   // LLVM_DEBUG(llvm::dbgs() << "Could not find any compute op\n");
-    //   return;
-    // }
-
-    // Value::user_range users = linalgOp->getResult(0).getUsers();
-    // if (!llvm::hasSingleElement(users)) {
-    //   linalgOp->emitOpError("Expected only one user of the compute op");
-    //   return signalPassFailure();
-    // }
-
-    // Operation *terminatorStoreOp = *(users.begin());
-    // if (!(isa<tensor::InsertSliceOp, tensor::ParallelInsertSliceOp>(
-    //         terminatorStoreOp))) {
-    //   terminatorStoreOp->emitOpError(
-    //       "Expected either tensor.insert_slice OR
-    //       tensor.parallel_insert_slice " "to be the only user of the compute
-    //       op");
-    //   return signalPassFailure();
-    // }
-
-    // std::optional<scf::SCFFuseConsumerOfSliceResult> fusedConsumer =
-    //     scf::tileAndFuseConsumerOfSlice(rewriter, terminatorStoreOp);
-    // if (!fusedConsumer) {
-    //   terminatorStoreOp->emitOpError(
-    //       "Failed to fuse any consumer op into the producer");
-    //   return signalPassFailure();
-    // }
-    // fusedConsumer->origConsumerOperand->getOwner()->erase();
   }
 };
 
 }  // namespace
 
-std::unique_ptr<Pass> createAMDAIEInsertLoopsForVectorizationPass() {
-  return std::make_unique<AMDAIEInsertLoopsForVectorizationPass>();
+std::unique_ptr<Pass> createAMDAIEInsertLoopsForVectorizationPass(
+    AMDAIEInsertLoopsForVectorizationOptions options) {
+  return std::make_unique<AMDAIEInsertLoopsForVectorizationPass>(options);
 }
 
 }  // namespace mlir::iree_compiler::AMDAIE

@@ -90,11 +90,25 @@ static llvm::cl::opt<bool> clMatmulElementwiseFusion(
                    "development purpose and should be removed in the future."),
     llvm::cl::init(false));
 
-void appendVectorizationToPipeline(OpPassManager &funcPassManager) {
+void appendVectorizationToPipeline(OpPassManager &funcPassManager,
+                                   bool tileParallelDims) {
   if (!clEnableVectorizationPasses) return;
   funcPassManager.addPass(createAMDAIECleanupPass());
-  funcPassManager.addPass(createAMDAIEInsertLoopsForVectorizationPass());
-  funcPassManager.addPass(createAMDAIEVectorizationPass());
+  {
+    AMDAIEInsertLoopsForVectorizationOptions options;
+    options.tileParallelDims = tileParallelDims;
+    funcPassManager.addPass(
+        createAMDAIEInsertLoopsForVectorizationPass(options));
+  }
+  if (tileParallelDims) {
+    funcPassManager.addPass(createCanonicalizerPass());
+    funcPassManager.addPass(createCSEPass());
+    AMDAIEFuseConsumerIntoLoopOptions options;
+    options.useSCFFor = true;
+    funcPassManager.addPass(createAMDAIEFuseConsumerIntoLoopPass(options));
+  } else {
+    funcPassManager.addPass(createAMDAIEVectorizationPass());
+  }
 }
 
 //===---------------------------------------------------------------------===//
@@ -327,7 +341,8 @@ void addPackPeelBasedPassPipeline(OpPassManager &funcPassManager,
   }
 
   // Vectorization passes
-  appendVectorizationToPipeline(funcPassManager);
+  appendVectorizationToPipeline(funcPassManager, /*tileParallelDims=*/true);
+  appendVectorizationToPipeline(funcPassManager, /*tileParallelDims=*/false);
 
   // Comprehensive bufferization
   addAMDAIEBufferizePasses(funcPassManager);
@@ -434,7 +449,7 @@ void addPadPackBasedPassPipeline(OpPassManager &funcPassManager,
     funcPassManager.addPass(createAMDAIELowerToUKernelsPass(options));
   }
   // Vectorization passes
-  appendVectorizationToPipeline(funcPassManager);
+  appendVectorizationToPipeline(funcPassManager, /*tileParallelDims=*/false);
   funcPassManager.addPass(createCanonicalizerPass());
 
   // Comprehensive bufferization
@@ -532,7 +547,7 @@ void addConvDecomposePassPipeline(OpPassManager &funcPassManager,
   funcPassManager.addPass(createDecomposeConvolutionToLowerDimOpsPass());
 
   // Vectorization passes
-  appendVectorizationToPipeline(funcPassManager);
+  appendVectorizationToPipeline(funcPassManager, /*tileParallelDims=*/false);
   funcPassManager.addPass(createCanonicalizerPass());
 
   // Comprehensive bufferization

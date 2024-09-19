@@ -150,7 +150,8 @@ std::unique_ptr<Pass> createAMDAIEHoistLogicalObjFifoPass();
 
 /// Create a pass to transform linalg.generics into a form which benefits later
 /// vectorization passes (to vector and aievec dialects).
-std::unique_ptr<Pass> createAMDAIEInsertLoopsForVectorizationPass();
+std::unique_ptr<Pass> createAMDAIEInsertLoopsForVectorizationPass(
+    AMDAIEInsertLoopsForVectorizationOptions options = {});
 
 /// Create a pass to fuse the pack operations into the for loops.
 std::unique_ptr<Pass> createAMDAIEFusePackIntoLoopPass(

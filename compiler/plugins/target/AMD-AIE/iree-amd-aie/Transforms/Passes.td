@@ -269,8 +269,13 @@ def AMDAIEInsertLoopsForVectorization :
     dialect.
   }];
 
- let constructor =
+  let constructor =
      "mlir::iree_compiler::AMDAIE::createAMDAIEInsertLoopsForVectorizationPass()";
+
+  let options = [
+    Option<"tileParallelDims", "tile-parallel-dims", "bool", /*default=*/"true",
+      "Set if you want to tile only parallel dimensions for vectorization">
+  ];
 }
 
 def AMDAIELinkExecutables :
