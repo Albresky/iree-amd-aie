@@ -41,15 +41,15 @@ void AMDAIEFuseConsumerIntoLoopPass::runOnOperation() {
   unsigned fuseDepth = 1;
   // Check if there is matmul-elementwise fusion opportunity. If so, overwrite
   // the `fuseDepth` to be 2.
-  // funcOp->walk<WalkOrder::PostOrder, ReverseIterator>([&](linalg::LinalgOp
-  // op) {
-  //   if (isMatmulProducerOfElementwise(op)) {
-  //     fuseDepth = 2;
-  //     return WalkResult::interrupt();
-  //   }
-  //   return WalkResult::advance();
-  // });
-  useSCFFor = true;
+  funcOp->walk<WalkOrder::PostOrder, ReverseIterator>([&](linalg::LinalgOp
+  op) {
+    if (isMatmulProducerOfElementwise(op)) {
+      fuseDepth = 2;
+      return WalkResult::interrupt();
+    }
+    return WalkResult::advance();
+  });
+  // useSCFFor = true;
   // Based on the `fuseDepth`, we would greedily fuse the consumer ops.
   for (unsigned depth = 1; depth <= fuseDepth; depth++) {
     // Walk through the graph in post order and find the loop.
@@ -71,7 +71,7 @@ void AMDAIEFuseConsumerIntoLoopPass::runOnOperation() {
                  << "There is no scf.for/forall loop to fuse with\n");
       return;
     }
-    llvm::outs() << "Found loop : " << (*scfLoopOp) << "\n";
+    // llvm::outs() << "Found loop : " << (*scfLoopOp) << "\n";
 
     // Search the compute op and its consumer slices.
     linalg::LinalgOp linalgOp;
@@ -85,7 +85,7 @@ void AMDAIEFuseConsumerIntoLoopPass::runOnOperation() {
       LLVM_DEBUG(llvm::dbgs() << "Could not find any compute op\n");
       return;
     }
-    llvm::outs() << "Found linalg op : " << (linalgOp) << "\n";
+    // llvm::outs() << "Found linalg op : " << (linalgOp) << "\n";
 
     Value::user_range users = linalgOp->getResult(0).getUsers();
     if (!llvm::hasSingleElement(users)) {
