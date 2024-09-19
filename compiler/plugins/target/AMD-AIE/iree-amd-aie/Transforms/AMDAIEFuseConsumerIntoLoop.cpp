@@ -44,7 +44,8 @@ void AMDAIEFuseConsumerIntoLoopPass::runOnOperation() {
   funcOp->walk<WalkOrder::PostOrder, ReverseIterator>([&](linalg::LinalgOp
   op) {
     if (isMatmulProducerOfElementwise(op)) {
-      fuseDepth = 2;
+      if (useSCFFor) fuseDepth = 1;
+      else fuseDepth = 2;
       return WalkResult::interrupt();
     }
     return WalkResult::advance();
