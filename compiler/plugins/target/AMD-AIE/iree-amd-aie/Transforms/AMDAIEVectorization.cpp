@@ -75,7 +75,7 @@ void AMDAIEVectorizationPass::runOnOperation() {
     // Temporarily disabling linalg::FillOp vectorization. Current compilation
     // pipeline crashes in DMAToChannelPass: 'error: operand #0 does not
     // dominate this use'. TODO(newling) follow-up on this.
-    if (isa<linalg::FillOp>(op)) return;
+    // if (isa<linalg::FillOp>(op)) return;
 
     // For quantized ops elementwise ops are vectorized to ops that operate on
     // extremely large vectors, e.g., things like arith.addi %60, %63 :

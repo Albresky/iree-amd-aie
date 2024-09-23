@@ -108,6 +108,7 @@ void appendVectorizationToPipeline(OpPassManager &funcPassManager,
     funcPassManager.addPass(createAMDAIEFuseConsumerIntoLoopPass(options));
   } else {
     funcPassManager.addPass(createAMDAIEVectorizationPass());
+    funcPassManager.addPass(createOptimizeTensorInsertExtractSlicesPass());
   }
 }
 
