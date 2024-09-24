@@ -101,11 +101,13 @@ void appendVectorizationToPipeline(OpPassManager &funcPassManager,
         createAMDAIEInsertLoopsForVectorizationPass(options));
   }
   if (tileParallelDims) {
-    funcPassManager.addPass(createCanonicalizerPass());
-    funcPassManager.addPass(createCSEPass());
+    // funcPassManager.addPass(createCanonicalizerPass());
+    // funcPassManager.addPass(createCSEPass());
     AMDAIEFuseConsumerIntoLoopOptions options;
     options.useSCFFor = true;
     funcPassManager.addPass(createAMDAIEFuseConsumerIntoLoopPass(options));
+    // funcPassManager.addPass(createCanonicalizerPass());
+    // funcPassManager.addPass(createCSEPass());
   } else {
     funcPassManager.addPass(createAMDAIEVectorizationPass());
     funcPassManager.addPass(createOptimizeTensorInsertExtractSlicesPass());

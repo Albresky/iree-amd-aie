@@ -76,6 +76,8 @@ class AMDAIEInsertLoopsForVectorizationPass
       tempTileSizes[5] = 1;
       tileSizes = tempTileSizes;
     }
+    tileSizes[0] = 0;
+    tileSizes[1] = 0;
     tileSizes[numIterators - 3] = 0;
     tileSizes[numIterators - 2] = 0;
     tileSizes[numIterators - 1] = 0;
