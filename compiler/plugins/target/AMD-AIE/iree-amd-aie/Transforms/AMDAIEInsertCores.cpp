@@ -133,8 +133,8 @@ LogicalResult insertCoreOps(mlir::ModuleOp moduleOp) {
       // subset of ops which we know should be in the core.
       // TODO(newling) improve this design.
       bool insertInCore =
-          isa<linalg::LinalgOp>(op) || isa<vector::ContractionOp>(op) ||
-          isa<memref::ExtractStridedMetadataOp>(op) || isa<func::CallOp>(op);
+          isa<linalg::LinalgOp, vector::ContractionOp, memref::ExtractStridedMetadataOp,
+              func::CallOp, arith::TruncFOp, vector::TransferWriteOp, vector::TransferReadOp>(op);
       if (insertInCore) {
         // Most distant ancestor of 'op' that's a strict descendant of
         // 'forallOp'.

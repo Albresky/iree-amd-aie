@@ -73,6 +73,22 @@ class AMDAIEInsertLoopsForVectorizationPass
     if (numIterators < 4) return failure();
 
     // Matmul-like ops have 3 operands.
+    if (genericOp->getNumOperands() == 2) {
+      // arith.truncf
+      auto iteratorTypes = genericOp.getIteratorTypesArray();
+      auto numIterators = iteratorTypes.size();
+      assert(numIterators >= 3 && "expected at least 3 iterators here");
+
+      SmallVector<int64_t> tileSizes(numIterators, 1);
+      tileSizes[numIterators - 2] = 0;
+      tileSizes[numIterators - 1] = 0;
+      auto opts = linalg::LinalgTilingOptions().setTileSizes(tileSizes);
+      auto tiled = linalg::tileLinalgOp(rewriter, genericOp, opts);
+      const auto &loops = tiled.value().loops;
+      assert(!loops.empty() && "expected at least one loop here");
+      rewriter.replaceOp(genericOp, loops[0]->getResult(0));
+      return success();
+    }
     if (genericOp->getNumOperands() != 3) return failure();
 
     // Check that the operands and result are of vectorizable types, if they are

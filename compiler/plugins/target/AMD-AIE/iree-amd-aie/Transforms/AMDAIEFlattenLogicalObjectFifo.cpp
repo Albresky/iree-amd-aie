@@ -8,6 +8,7 @@
 #include "iree-amd-aie/Transforms/Passes.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/Iterators.h"
+#include "mlir/Dialect/Vector/IR/VectorOps.h"
 
 #define DEBUG_TYPE "iree-amdaie-flatten-logicalobjectfifo"
 
@@ -67,6 +68,69 @@ void AMDAIEFlattenLogicalObjectFifoPass::runOnOperation() {
         rewriter.replaceAllUsesWith(accessOp, reinterpretOp);
       }
     }
+  });
+
+  auto truncF = [](IRRewriter& rewriter, arith::TruncFOp &op) -> Value {
+    // moduleOp->walk([&](arith::TruncFOp op) {
+      // Get old type.
+      OpBuilder::InsertionGuard g(rewriter);
+      rewriter.setInsertionPoint(op);
+      auto oldShapedType = cast<ShapedType>(op.getType());
+      llvm::outs()<<"Old shape = "<<oldShapedType<<"\n";
+      llvm::outs().flush();
+      // Linearize the shape.
+      int64_t linearizedSize = oldShapedType.getNumElements();
+      // Input of arith.truncf.
+      Value origInputOfTruncFOp = op.getIn();
+      // Form new vector type for input and output.
+      VectorType newVectorTypeForInput =
+          VectorType::get({linearizedSize}, cast<ShapedType>(origInputOfTruncFOp.getType()).getElementType());
+      VectorType newVectorTypeForOutput =
+          VectorType::get({linearizedSize}, oldShapedType.getElementType());
+      
+      llvm::outs()<<"New input type = "<<newVectorTypeForInput<<"\n";
+      Value newInputVector = rewriter.create<vector::ShapeCastOp>(
+          op.getLoc(), newVectorTypeForInput, origInputOfTruncFOp);
+      Value newTruncFOp = rewriter.create<arith::TruncFOp>(op.getLoc(), newVectorTypeForOutput, newInputVector);
+      // Value newOutputVector = rewriter.create<vector::ShapeCastOp>(
+      //     op.getLoc(), op.getType(), newTruncFOp);
+      // rewriter.replaceOp(op, newOutputVector);
+      return newTruncFOp;
+
+      // llvm::outs()<<"New input vector = "<<newVector<<"\n";
+    // });
+  };
+
+  moduleOp->walk([&](arith::MaximumFOp op) {
+    // Get old type.
+    OpBuilder::InsertionGuard g(rewriter);
+    rewriter.setInsertionPoint(op);
+    auto oldShapedType = cast<ShapedType>(op.getType());
+    llvm::outs()<<"Old shape = "<<oldShapedType<<"\n";
+    llvm::outs().flush();
+    // Linearize the shape.
+    int64_t linearizedSize = oldShapedType.getNumElements();
+    // Input of arith.max.
+    Value oldLhs = op.getLhs();
+    Value oldRhs = op.getRhs();
+    // Form Lhs/TruncF
+    auto oldTruncFOp = cast<arith::TruncFOp>(oldLhs.getDefiningOp());
+    Value newLhs = truncF(rewriter, oldTruncFOp);
+    // Form Rhs.
+    VectorType newVectorTypeForLhsAndRhs =
+        VectorType::get({linearizedSize}, oldShapedType.getElementType());
+    Value newRhs = rewriter.create<vector::ShapeCastOp>(
+        op.getLoc(), newVectorTypeForLhsAndRhs, oldRhs);
+    // Value origInputOfTruncFOp = op.getIn();
+    
+    Value newMaximumFOp = rewriter.create<arith::MaximumFOp>(op.getLoc(),
+        newVectorTypeForLhsAndRhs, newLhs, newRhs);
+
+    Value newOutputVector = rewriter.create<vector::ShapeCastOp>(
+        op.getLoc(), op.getType(), newMaximumFOp);
+    rewriter.replaceOp(op, newOutputVector);
+
+    // llvm::outs()<<"New input vector = "<<newVector<<"\n";
   });
 
   // Erase old access operations.
