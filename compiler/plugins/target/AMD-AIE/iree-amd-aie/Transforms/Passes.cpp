@@ -284,6 +284,8 @@ void addPackPeelBasedPassPipeline(OpPassManager &funcPassManager,
     funcPassManager.addPass(createAMDAIELowerToUKernelsPass(options));
   }
 
+  funcPassManager.addPass(createAMDAIEFunctionOutliningPass());
+
   // Vectorization passes
   appendVectorizationToPipeline(funcPassManager, enableVectorizationPasses);
 
