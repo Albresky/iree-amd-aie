@@ -33,11 +33,12 @@ class AMDAIEFunctionOutliningPass
 
 void AMDAIEFunctionOutliningPass::runOnOperation() {
   mlir::FunctionOpInterface funcOp = getOperation();
+  Block *parentFuncOpBlock = funcOp->getBlock();
   ModuleOp moduleOp = funcOp->getParentOfType<ModuleOp>();
   MLIRContext *context = &getContext();
   IRRewriter rewriter(context);
 
-  auto outlinedToAFunction = [&](linalg::LinalgOp &computeOp) -> func::FuncOp {
+  auto outlineToAFunction = [&](linalg::LinalgOp &computeOp) -> func::FuncOp {
     // Form outlined FuncName.
     std::string computeName = "";
     if (isMatmul(computeOp)) {
@@ -97,15 +98,35 @@ void AMDAIEFunctionOutliningPass::runOnOperation() {
     return outlinedFunc;
   };
 
-  funcOp.walk([&](linalg::LinalgOp computeOp) {
-    if (isa<linalg::FillOp, linalg::CopyOp>(computeOp))
-      return WalkResult::skip();
-    func::FuncOp outlinedFuncOp = outlinedToAFunction(computeOp);
-    rewriter.setInsertionPoint(computeOp);
-    auto callOp = rewriter.create<func::CallOp>(
-        computeOp.getLoc(), outlinedFuncOp, computeOp->getOperands());
-    rewriter.replaceOp(computeOp, callOp.getResults());
-    return WalkResult::advance();
+  WalkResult res = funcOp.walk([&](AMDAIE::CoreOp coreOp) {
+    coreOp.walk([&](vector::TransferWriteOp vectorTransferWriteOp) {
+      Block *innerContainingBlock = vectorTransferWriteOp->getBlock();
+      if (isa<AMDAIE::CoreOp>(vectorTransferWriteOp->getParentOp()))
+        return WalkResult::Advance();
+      Operation *rootAncestorOp = vectorTransferWriteOp;
+      while (rootAncestorOp->getParentOp() != coreOp) {
+        rootAncestorOp = rootAncestorOp->getParentOp();
+      }
+      DenseSet<Value> inputArgsSet;
+      innerContainingBlock->walk([&](Operation *innerOps) {
+        for (Value val : innerOps->getOperands()) {
+          if (val.getParentBlock() == parentFuncOpBlock) {
+            inputArgsSet.insert(val);
+          }
+        }
+      });
+      SmallVector<Value> inputArgs =
+          llvm::map_to_vector(inputArgsSet, [&](Value val) { return val; });
+      SmallVector<Value> outputArg;
+      outputArg.push_back(vectorTransferWriteOp.getSource());
+      func::FuncOp outlinedFuncOp = outlineToAFunction(
+          rootAncestorOp, /*inputArgs=*/inputArgs, /*outputArgs=*/outputArg);
+      rewriter.setInsertionPoint(forOp);
+      auto callOp = rewriter.create<func::CallOp>(forOp.getLoc(),
+                                                  outlinedFuncOp, inputArgs);
+      rewriter.replaceOp(outputArg[0], callOp.getResults());
+      return WalkResult::advance();
+    });
   });
 }
 
