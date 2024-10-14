@@ -284,8 +284,6 @@ void addPackPeelBasedPassPipeline(OpPassManager &funcPassManager,
     funcPassManager.addPass(createAMDAIELowerToUKernelsPass(options));
   }
 
-  funcPassManager.addPass(createAMDAIEFunctionOutliningPass());
-
   // Vectorization passes
   appendVectorizationToPipeline(funcPassManager, enableVectorizationPasses);
 
@@ -562,6 +560,7 @@ void addAMDAIEObjectFifoLoweringPasses(OpPassManager &passManager,
 
   passManager.addPass(createAMDAIENormalizeLoopBoundsPass());
   passManager.addPass(createAMDAIEInsertCoresPass());
+  passManager.addPass(createAMDAIEFunctionOutliningPass());
   passManager.addPass(createAMDAIELocalizeLogicalObjectFifoPass());
   passManager.addPass(createCSEPass());
 
