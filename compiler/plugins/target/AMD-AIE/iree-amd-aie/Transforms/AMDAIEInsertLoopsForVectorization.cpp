@@ -60,7 +60,8 @@ class AMDAIEInsertLoopsForVectorizationPass
     auto tiled = linalg::tileLinalgOp(rewriter, genericOp, opts);
     const auto &loops = tiled.value().loops;
     assert(!loops.empty() && "expected at least one loop here");
-    rewriter.replaceOp(genericOp, loops[0]->getResult(0));
+    rewriter.eraseOp(genericOp);
+    // rewriter.replaceOp(genericOp, loops[0]->getOperand(2));
   }
 
   // Return success if the generic op is rewritten, failure otherwise.
@@ -88,7 +89,8 @@ class AMDAIEInsertLoopsForVectorizationPass
       auto tiled = linalg::tileLinalgOp(rewriter, genericOp, opts);
       const auto &loops = tiled.value().loops;
       assert(!loops.empty() && "expected at least one loop here");
-      rewriter.replaceOp(genericOp, loops[0]->getResult(0));
+      rewriter.eraseOp(genericOp);
+      // rewriter.replaceOp(genericOp, loops[0]->getOperand(loops));
       return success();
     }
     // Matmul-like ops have 3 operands.
@@ -102,7 +104,7 @@ class AMDAIEInsertLoopsForVectorizationPass
       };
       auto lhsType = elType(genericOp->getOperand(0));
       auto rhsType = elType(genericOp->getOperand(1));
-      auto resType = elType(genericOp->getResult(0));
+      auto resType = elType(genericOp->getOperand(2));
       FailureOr<std::array<uint32_t, 3>> maybeSize =
           ::mlir::iree_compiler::AMDAIE::getAIEMatmulInstructionSize(
               lhsType, rhsType, resType);
