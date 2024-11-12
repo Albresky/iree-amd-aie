@@ -13,6 +13,7 @@
 #include "mlir/Dialect/Linalg/Transforms/Hoisting.h"
 #include "mlir/Dialect/Linalg/Transforms/Transforms.h"
 #include "mlir/Dialect/Vector/IR/VectorOps.h"
+#include "mlir/IR/Iterators.h"
 
 #define DEBUG_TYPE "iree-amdaie-linalg-function-outlining"
 
@@ -30,6 +31,52 @@ static bool mustOutline(linalg::LinalgOp linalgOp) {
 /// outlined.
 static bool mustNotOutline(linalg::LinalgOp linalgOp) {
   return isa<linalg::CopyOp, linalg::FillOp>(linalgOp);
+}
+
+/// Utility to check if a given linalg op is an elementwise op with arith.truncf
+/// as its only compute op.
+static bool isTruncf(linalg::LinalgOp linalgOp) {
+  if (!isElementwise(linalgOp)) return false;
+  Block *body = linalgOp.getBlock();
+  auto yieldOp = cast<linalg::YieldOp>(body->getTerminator());
+  Value yieldVal = yieldOp.getOperand(0);
+  auto truncFOp =
+      dyn_cast_if_present<arith::TruncFOp>(yieldVal.getDefiningOp());
+  if (!truncFOp) return false;
+  auto blockArg = dyn_cast<BlockArgument>(truncFOp.getIn());
+  if (!blockArg || blockArg.getOwner() != body) return false;
+  return true;
+}
+
+/// Utility to check if the dispatch is a Matmul+Truncf dispatch. Currently we
+/// only support this dispatch for outlining.
+static bool isMatmulTruncf(ModuleOp moduleOp) {
+  bool hasMatmulTruncf = false;
+  WalkResult walkResult = moduleOp.walk<WalkOrder::PostOrder, ReverseIterator>(
+      [&](AMDAIE::CoreOp coreOp) {
+        bool hasTruncf = false, hasMatmul = false;
+        WalkResult coreOpWalkResult =
+            coreOp.walk([&](linalg::LinalgOp linalgOp) {
+              if (isa<linalg::CopyOp, linalg::FillOp>(linalgOp))
+                return WalkResult::skip();
+              if (isMatmul(linalgOp)) {
+                hasMatmul = true;
+              } else if (isTruncf(linalgOp)) {
+                hasTruncf = true;
+              } else {
+                return WalkResult::interrupt();
+              }
+              return WalkResult::advance();
+            });
+        if (coreOpWalkResult.wasInterrupted()) return WalkResult::interrupt();
+        if (hasMatmul && hasTruncf) {
+          hasMatmulTruncf = true;
+        }
+        return WalkResult::advance();
+      });
+
+  if (walkResult.wasInterrupted()) return false;
+  return hasMatmulTruncf;
 }
 
 /// Utility to outline the linalg compute op.
@@ -92,6 +139,8 @@ class AMDAIELinalgFunctionOutliningPass
 
 void AMDAIELinalgFunctionOutliningPass::runOnOperation() {
   ModuleOp moduleOp = getOperation();
+  // We make a silent exit in case the given dispatch is not a Matmul+Truncf.
+  if (!isMatmulTruncf(moduleOp)) return;
   MLIRContext *context = &getContext();
   IRRewriter rewriter(context);
 
