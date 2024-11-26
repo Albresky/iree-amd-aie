@@ -684,7 +684,7 @@ void addMLIRAIELoweringPasses(OpPassManager &pm) {
 
   pm.addPass(createCanonicalizerPass());
   pm.addPass(createConvertLinalgToLoopsPass());
-  pm.addPass(createLowerAffinePass());
+  // pm.addPass(createLowerAffinePass());
   pm.addPass(createConvertSCFToCFPass());
 
   {
