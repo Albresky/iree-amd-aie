@@ -98,7 +98,8 @@ struct ControlPacketDmaBuilder {
       int64_t headerAndDataLength = dataLength + 1;
       if (ctrlPktBlocks.size() == 0 ||
           ctrlPktBlocks.back().connectionOp != connectionOp ||
-          !deviceModel.isCoreTile(col, row)) {
+          !deviceModel.isCoreTile(col, row) ||
+          ctrlPktBlocks.back().size + headerAndDataLength > 1024) {
         ctrlPktBlocks.push_back({connectionOp, ctrlPktOp, headerAndDataLength,
                                  static_cast<int64_t>(ctrlPktSequence.size())});
       } else {
