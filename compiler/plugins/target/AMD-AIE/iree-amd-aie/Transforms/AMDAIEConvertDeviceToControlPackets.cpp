@@ -137,10 +137,8 @@ LogicalResult convertDeviceToControlPacket(IRRewriter &rewriter,
   uint32_t resource_id = 0;
 
   for (xilinx::AIE::TileOp tileOp : deviceOp.getOps<xilinx::AIE::TileOp>()) {
-    auto colIndex = rewriter.create<arith::ConstantIndexOp>(
-        rewriter.getUnknownLoc(), tileOp.getCol());
-    auto rowIndex = rewriter.create<arith::ConstantIndexOp>(
-        rewriter.getUnknownLoc(), tileOp.getRow());
+    auto colIndex = tileOp.getCol();
+    auto rowIndex = tileOp.getRow();
 
     uint64_t addr;
     SmallVector<int32_t> data;
