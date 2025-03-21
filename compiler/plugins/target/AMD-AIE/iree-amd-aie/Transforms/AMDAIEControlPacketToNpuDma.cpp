@@ -96,7 +96,7 @@ struct ControlPacketDmaBuilder {
       // Get the source offsets, sizes, and strides.
       uint32_t dataLength = ctrlPktOp.getLength();
       int64_t headerAndDataLength = dataLength + 1;
-      if (ctrlPktBlocks.size() == 0 ||
+      if (ctrlPktBlocks.size() <= 1 ||
           ctrlPktBlocks.back().connectionOp != connectionOp ||
           !deviceModel.isCoreTile(col, row) ||
           ctrlPktBlocks.back().size + headerAndDataLength > 1024) {

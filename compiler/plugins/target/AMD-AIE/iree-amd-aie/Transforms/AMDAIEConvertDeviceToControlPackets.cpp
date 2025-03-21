@@ -136,35 +136,36 @@ LogicalResult convertDeviceToControlPacket(IRRewriter &rewriter,
   // ID for DenseI32ResourceElementsAttr.
   uint32_t resource_id = 0;
 
-  // for (xilinx::AIE::TileOp tileOp : deviceOp.getOps<xilinx::AIE::TileOp>()) {
-  //   auto colIndex = rewriter.create<arith::ConstantIndexOp>(
-  //       rewriter.getUnknownLoc(), tileOp.getCol());
-  //   auto rowIndex = rewriter.create<arith::ConstantIndexOp>(
-  //       rewriter.getUnknownLoc(), tileOp.getRow());
+  for (xilinx::AIE::TileOp tileOp : deviceOp.getOps<xilinx::AIE::TileOp>()) {
+    auto colIndex = rewriter.create<arith::ConstantIndexOp>(
+        rewriter.getUnknownLoc(), tileOp.getCol());
+    auto rowIndex = rewriter.create<arith::ConstantIndexOp>(
+        rewriter.getUnknownLoc(), tileOp.getRow());
 
-  //   uint64_t addr = 0;
+    uint64_t addr;
+    SmallVector<int32_t> data;
+    if (deviceModel.isShimTile(colIndex, rowIndex)) {
+      addr = (colIndex << deviceModel.getColumnShift()) |
+             (rowIndex << deviceModel.getRowShift()) | 0x00060000;
+      data = {55};
+    }
+    // else if (deviceModel.isMemTile(colIndex, rowIndex)) {
+    //   addr = (colIndex << deviceModel.getColumnShift()) |
+    //          (rowIndex << deviceModel.getRowShift()) | 0x00060000;
+    // } else if (deviceModel.isCoreTile(colIndex, rowIndex)) {
+    //   addr = (colIndex << deviceModel.getColumnShift()) |
+    //          (rowIndex << deviceModel.getRowShift()) | 0x00060000;
+    // } else {
+    //   return deviceOp.emitOpError()
+    //          << "unsupported tile type at col=" << tileOp.getCol()
+    //          << ", row=" << tileOp.getRow();
+    // }
 
-  //   if (deviceModel.isShimTile(colIndex, rowIndex)) {
-  //     addr = (colIndex << deviceModel.getColumnShift()) |
-  //            (rowIndex << deviceModel.getRowShift()) | 0x00060000;
-  //   } else if (deviceModel.isMemTile(colIndex, rowIndex)) {
-  //     addr = (colIndex << deviceModel.getColumnShift()) |
-  //            (rowIndex << deviceModel.getRowShift()) | 0x00060000;
-  //   } else if (deviceModel.isCoreTile(colIndex, rowIndex)) {
-  //     addr = (colIndex << deviceModel.getColumnShift()) |
-  //            (rowIndex << deviceModel.getRowShift()) | 0x00060000;
-  //   } else {
-  //     return deviceOp.emitOpError()
-  //            << "unsupported tile type at col=" << tileOp.getCol()
-  //            << ", row=" << tileOp.getRow();
-  //   }
-
-  //   SmallVector<int32_t> data = {31};
-  //   rewriter.create<AMDAIE::NpuControlPacketOp>(
-  //       rewriter.getUnknownLoc(), addr,
-  //       /*length=*/1, opcode, stream_id,
-  //       /*data=*/rewriter.getDenseI32ArrayAttr(data));
-  // }
+    rewriter.create<AMDAIE::NpuControlPacketOp>(
+        rewriter.getUnknownLoc(), addr,
+        /*length=*/1, opcode, stream_id,
+        /*data=*/rewriter.getDenseI32ArrayAttr(data));
+  }
 
   // Process each operation in the transaction.
   for (uint32_t i = 0; i < NumOps; i++) {
