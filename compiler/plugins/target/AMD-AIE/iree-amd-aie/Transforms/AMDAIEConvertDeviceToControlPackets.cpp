@@ -146,6 +146,10 @@ LogicalResult convertDeviceToControlPacket(IRRewriter &rewriter,
       addr = (colIndex << deviceModel.getColumnShift()) |
              (rowIndex << deviceModel.getRowShift()) | 0x00060000;
       data = {55};
+      rewriter.create<AMDAIE::NpuControlPacketOp>(
+          rewriter.getUnknownLoc(), addr,
+          /*length=*/1, opcode, stream_id,
+          /*data=*/rewriter.getDenseI32ArrayAttr(data));
     }
     // else if (deviceModel.isMemTile(colIndex, rowIndex)) {
     //   addr = (colIndex << deviceModel.getColumnShift()) |
@@ -158,11 +162,6 @@ LogicalResult convertDeviceToControlPacket(IRRewriter &rewriter,
     //          << "unsupported tile type at col=" << tileOp.getCol()
     //          << ", row=" << tileOp.getRow();
     // }
-
-    rewriter.create<AMDAIE::NpuControlPacketOp>(
-        rewriter.getUnknownLoc(), addr,
-        /*length=*/1, opcode, stream_id,
-        /*data=*/rewriter.getDenseI32ArrayAttr(data));
   }
 
   // Process each operation in the transaction.
