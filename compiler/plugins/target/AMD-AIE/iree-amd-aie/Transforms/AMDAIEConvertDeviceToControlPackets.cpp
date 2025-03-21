@@ -142,7 +142,7 @@ LogicalResult convertDeviceToControlPacket(IRRewriter &rewriter,
 
     uint64_t addr;
     SmallVector<int32_t> data;
-    if (deviceModel.isShimTile(colIndex, rowIndex)) {
+    if (deviceModel.isCoreTile(colIndex, rowIndex)) {
       addr = (colIndex << deviceModel.getColumnShift()) |
              (rowIndex << deviceModel.getRowShift()) | 0x00060000;
       data = {55};
@@ -150,18 +150,8 @@ LogicalResult convertDeviceToControlPacket(IRRewriter &rewriter,
           rewriter.getUnknownLoc(), addr,
           /*length=*/1, opcode, stream_id,
           /*data=*/rewriter.getDenseI32ArrayAttr(data));
+      break;
     }
-    // else if (deviceModel.isMemTile(colIndex, rowIndex)) {
-    //   addr = (colIndex << deviceModel.getColumnShift()) |
-    //          (rowIndex << deviceModel.getRowShift()) | 0x00060000;
-    // } else if (deviceModel.isCoreTile(colIndex, rowIndex)) {
-    //   addr = (colIndex << deviceModel.getColumnShift()) |
-    //          (rowIndex << deviceModel.getRowShift()) | 0x00060000;
-    // } else {
-    //   return deviceOp.emitOpError()
-    //          << "unsupported tile type at col=" << tileOp.getCol()
-    //          << ", row=" << tileOp.getRow();
-    // }
   }
 
   // Process each operation in the transaction.
