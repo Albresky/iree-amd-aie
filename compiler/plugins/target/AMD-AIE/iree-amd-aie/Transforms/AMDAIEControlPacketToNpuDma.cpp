@@ -96,13 +96,16 @@ struct ControlPacketDmaBuilder {
       // Get the source offsets, sizes, and strides.
       uint32_t dataLength = ctrlPktOp.getLength();
       int64_t headerAndDataLength = dataLength + 1;
+      int packetHeaderSize = 0;
       if (ctrlPktBlocks.size() <= 1 ||
           ctrlPktBlocks.back().connectionOp != connectionOp ||
           !deviceModel.isCoreTile(col, row) ||
-          ctrlPktBlocks.back().size + headerAndDataLength > 1024) {
+          ctrlPktBlocks.back().size + headerAndDataLength + 1 > 1024) {
         ctrlPktBlocks.push_back({connectionOp, ctrlPktOp, headerAndDataLength,
                                  static_cast<int64_t>(ctrlPktSequence.size())});
       } else {
+        headerAndDataLength++;
+        packetHeaderSize = 1;
         ctrlPktBlocks.back().size += headerAndDataLength;
       }
 
@@ -117,14 +120,24 @@ struct ControlPacketDmaBuilder {
         return WalkResult::interrupt();
       }
 
-      words[0] = *header;
+      if (packetHeaderSize) {
+        std::optional<AMDAIE::FlowOp> maybeFlowOp = connectionOp.getFlowOp();
+        std::optional<uint8_t> maybePacketId = maybeFlowOp->getPacketId();
+        words[0] = *maybePacketId;
+        uint32_t lower31Bits = words[0] & 0x7FFFFFFF;
+        uint32_t parity = (llvm::popcount(lower31Bits) + 1) % 2;
+        // Set the parity bit in the most significant bit (bit 31).
+        words[0] = (parity << 31) | lower31Bits;
+      }
+
+      words[0 + packetHeaderSize] = *header;
       // Store the control packet data.
       std::optional<ArrayRef<int32_t>> maybeData =
           ctrlPktOp.getDataFromArrayOrResource();
       if (maybeData.has_value()) {
         for (uint32_t i = 0; i < dataLength; ++i) {
           int32_t data = maybeData.value()[i];
-          words[i + 1] = reinterpret_cast<uint32_t &>(data);
+          words[i + 1 + packetHeaderSize] = reinterpret_cast<uint32_t &>(data);
         }
       }
 
