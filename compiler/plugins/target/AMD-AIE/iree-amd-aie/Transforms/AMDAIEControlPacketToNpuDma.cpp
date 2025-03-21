@@ -40,6 +40,13 @@ struct ControlPacketDmaBuilder {
       llvm::outs() << utohexstr(word, 8) << "\n";
   }
 
+  struct CtrlPktBlock {
+    AMDAIE::ConnectionOp connectionOp;
+    AMDAIE::NpuControlPacketOp ctrlPktOp;
+    int64_t size;
+    int64_t offset;
+  };
+
   LogicalResult convert(IRRewriter &rewriter, AMDAIE::WorkgroupOp workgroupOp) {
     ctrlPktSequence.clear();
 
@@ -69,6 +76,7 @@ struct ControlPacketDmaBuilder {
     if (res.wasInterrupted()) return failure();
 
     std::vector<AMDAIE::NpuControlPacketOp> ctrlPktOps;
+    std::vector<CtrlPktBlock> ctrlPktBlocks;
     // Convert `NpuControlPacketOp` to `NpuDmaCpyNdOp` + `NpuDmaWaitOp`.
     res = workgroupOp->walk([&](AMDAIE::NpuControlPacketOp ctrlPktOp) {
       ctrlPktOps.push_back(ctrlPktOp);
@@ -88,14 +96,14 @@ struct ControlPacketDmaBuilder {
       // Get the source offsets, sizes, and strides.
       uint32_t dataLength = ctrlPktOp.getLength();
       int64_t headerAndDataLength = dataLength + 1;
-      SmallVector<int64_t> dmaSourceOffsets{
-          0, 0, 0, static_cast<long>(ctrlPktSequence.size())};
-      SmallVector<int64_t> dmaSourceSizes{1, 1, 1, headerAndDataLength};
-      SmallVector<int64_t> dmaSourceStrides{0, 0, 0, 1};
-      // Target offsets, sizes, and strides are left empty.
-      SmallVector<int64_t> dmaTargetOffsets;
-      SmallVector<int64_t> dmaTargetSizes;
-      SmallVector<int64_t> dmaTargetStrides;
+      if (ctrlPktBlocks.size() == 0 ||
+          ctrlPktBlocks.back().connectionOp != connectionOp ||
+          !deviceModel.isCoreTile(col, row)) {
+        ctrlPktBlocks.push_back({connectionOp, ctrlPktOp, headerAndDataLength,
+                                 static_cast<int64_t>(ctrlPktSequence.size())});
+      } else {
+        ctrlPktBlocks.back().size += headerAndDataLength;
+      }
 
       // Store the control packet header.
       llvm::MutableArrayRef<uint32_t> words =
@@ -119,7 +127,21 @@ struct ControlPacketDmaBuilder {
         }
       }
 
-      rewriter.setInsertionPoint(ctrlPktOp);
+      return WalkResult::advance();
+    });
+    if (res.wasInterrupted()) return failure();
+
+    for (CtrlPktBlock block : ctrlPktBlocks) {
+      // Get the source offsets, sizes, and strides.
+      SmallVector<int64_t> dmaSourceOffsets{0, 0, 0, block.offset};
+      SmallVector<int64_t> dmaSourceSizes{1, 1, 1, block.size};
+      SmallVector<int64_t> dmaSourceStrides{0, 0, 0, 1};
+      // Target offsets, sizes, and strides are left empty.
+      SmallVector<int64_t> dmaTargetOffsets;
+      SmallVector<int64_t> dmaTargetSizes;
+      SmallVector<int64_t> dmaTargetStrides;
+
+      rewriter.setInsertionPoint(block.ctrlPktOp);
       // Create token.
       SmallVector<Type> resultTypes = {
           rewriter.getType<AMDAIE::AsyncSourceTokenType>()};
@@ -127,16 +149,14 @@ struct ControlPacketDmaBuilder {
 
       // Create `NpuDmaCpyNdOp` and `NpuDmaWaitOp`.
       auto dmaOp = rewriter.create<AMDAIE::NpuDmaCpyNdOp>(
-          rewriter.getUnknownLoc(), sourceResultTypes, connectionOp, nullptr,
-          dmaTargetOffsets, dmaTargetSizes, dmaTargetStrides,
-          /*target_bd_id=*/nullptr, connectionOp.getSource(), dmaSourceOffsets,
-          dmaSourceSizes, dmaSourceStrides, /*source_bd_id=*/nullptr);
+          rewriter.getUnknownLoc(), sourceResultTypes, block.connectionOp,
+          nullptr, dmaTargetOffsets, dmaTargetSizes, dmaTargetStrides,
+          /*target_bd_id=*/nullptr, block.connectionOp.getSource(),
+          dmaSourceOffsets, dmaSourceSizes, dmaSourceStrides,
+          /*source_bd_id=*/nullptr);
       rewriter.create<AMDAIE::NpuDmaWaitOp>(rewriter.getUnknownLoc(),
                                             dmaOp.getResult(0));
-
-      return WalkResult::advance();
-    });
-    if (res.wasInterrupted()) return failure();
+    }
 
     // Erase all the `NpuControlPacketOp`.
     for (AMDAIE::NpuControlPacketOp ctrlPktOp : ctrlPktOps)

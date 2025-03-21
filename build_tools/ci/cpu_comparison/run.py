@@ -2237,29 +2237,53 @@ class Tests:
             )
 
         # Control packet test with constant biases 1 and 2.
-        # Test on a single core.
+        # # Test on a single core.
+        # self.register(
+        #     MatmulConstBiasCtrlpkt(
+        #         8,
+        #         8,
+        #         8,
+        #         "i8",
+        #         "i32",
+        #         constant_bias_C=1,
+        #         constant_bias_D=2,
+        #         test_params=TestParams(
+        #             aie_compilation_flags=[
+        #                 "--iree-amdaie-num-rows=1",
+        #                 "--iree-amdaie-num-cols=1",
+        #             ],
+        #             name_suffix="OneCore",
+        #         ),
+        #     )
+        # )
+        # # Test on the phoenix 4x4 array.
+        # self.register(
+        #     MatmulConstBiasCtrlpkt(
+        #         1024, 1024, 1024, "i8", "i32", constant_bias_C=1, constant_bias_D=2
+        #     )
+        # )
+        # # Benchmark reconfiguration time only, do not run the kernel.
+        # self.register(
+        #     MatmulConstBiasCtrlpkt(
+        #         1024,
+        #         1024,
+        #         1024,
+        #         "i8",
+        #         "i32",
+        #         constant_bias_C=1,
+        #         constant_bias_D=2,
+        #         test_params=TestParams(run_benchmark=True, n_repeats=2),
+        #         additional_labels=["Performance"],
+        #         n_kernel_runs=0,
+        #         n_reconfigure_runs=50,
+        #     )
+        # )
+
+        # Test on the strix 4x4 array.
         self.register(
             MatmulConstBiasCtrlpkt(
-                8,
-                8,
-                8,
-                "i8",
-                "i32",
-                constant_bias_C=1,
-                constant_bias_D=2,
-                test_params=TestParams(
-                    aie_compilation_flags=[
-                        "--iree-amdaie-num-rows=1",
-                        "--iree-amdaie-num-cols=1",
-                    ],
-                    name_suffix="OneCore",
-                ),
-            )
-        )
-        # Test on the phoenix 4x4 array.
-        self.register(
-            MatmulConstBiasCtrlpkt(
-                1024, 1024, 1024, "i8", "i32", constant_bias_C=1, constant_bias_D=2
+                1024, 1024, 1024, "i32", "i32", constant_bias_C=1, constant_bias_D=2,
+                test_params=TestParams(run_on_target=["npu4"])
             )
         )
         # Benchmark reconfiguration time only, do not run the kernel.
@@ -2268,11 +2292,11 @@ class Tests:
                 1024,
                 1024,
                 1024,
-                "i8",
+                "i32",
                 "i32",
                 constant_bias_C=1,
                 constant_bias_D=2,
-                test_params=TestParams(run_benchmark=True, n_repeats=2),
+                test_params=TestParams(run_benchmark=True, n_repeats=2, run_on_target=["npu4"]),
                 additional_labels=["Performance"],
                 n_kernel_runs=0,
                 n_reconfigure_runs=50,
