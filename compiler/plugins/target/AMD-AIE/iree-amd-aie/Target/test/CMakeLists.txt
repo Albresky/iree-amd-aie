@@ -23,6 +23,8 @@ iree_cc_binary(
   DEPS
     iree::target::amd-aie::aie::AIEDialectIR
     iree::target::amd-aie::Target::AIETargets
+    iree::compiler::Dialect::HAL::IR::IR
+    iree::compiler::Dialect::HAL::IR::HALDialect
   TESTONLY
 )
 
@@ -45,6 +47,8 @@ iree_cc_test(
   DEPS
     gtest
     iree::target::amd-aie::Target::AIETargets
+    iree::compiler::Dialect::HAL::IR::HALDialect
+    iree::compiler::Dialect::HAL::IR::IR
 )
 
 file(GLOB _mlir_files *.mlir)
