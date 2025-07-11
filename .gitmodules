@@ -29,3 +29,13 @@
   url = https://github.com/iree-org/iree.git
   shallow = true
   ignore = dirty
+[submodule "third_party/torch-mlir"]
+  path = third_party/torch-mlir
+  url = https://github.com/llvm/torch-mlir.git
+  shallow = true
+  ignore = dirty
+[submodule "third_party/stablehlo"]
+  path = third_party/stablehlo
+  url = https://github.com/openxla/stablehlo.git
+  shallow = true
+  ignore = dirty

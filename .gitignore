@@ -7,12 +7,32 @@
 *-install/
 kernel-doc
 
+build*
+*-build
+
+install*
+*-install
+
+.cache
+.build-cache
+
+.venv
+.vscode
+
+llvm-aie*
+llvm_aie*
+
+*.log
+
+third_party
+
 # Python
 .env
 *.pyc
 **/.ipynb_checkpoints/
 .pytype/
 **/__pycache__/**
+*.whl
 
 # Visual Studio files
 .vs/

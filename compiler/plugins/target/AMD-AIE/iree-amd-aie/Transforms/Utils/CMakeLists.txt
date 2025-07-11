@@ -28,5 +28,7 @@ iree_cc_library(
     iree::compiler::Utils
     iree-amd-aie::aie_runtime::iree_aie_runtime_static
     iree::target::amd-aie::IR::AMDAIEDialect
+    iree::compiler::Dialect::HAL::IR::IR
+    iree::compiler::Dialect::HAL::IR::HALDialect    
   PUBLIC
 )

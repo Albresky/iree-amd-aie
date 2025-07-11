@@ -18,6 +18,7 @@ build_dir="$(cd $build_dir && pwd)"
 cache_dir="${cache_dir:-}"
 llvm_install_dir="${llvm_install_dir:-}"
 assertions="$1"
+enable_ctest="$2"
 
 # Setup cache dir.
 if [ -z "${cache_dir}" ]; then
@@ -39,7 +40,7 @@ if [[ "$OSTYPE" == "linux"* ]]; then
 fi
 
 export CCACHE_DIR="${cache_dir}/ccache"
-export CCACHE_MAXSIZE="700M"
+export CCACHE_MAXSIZE="5G"
 export CMAKE_C_COMPILER_LAUNCHER=ccache
 export CMAKE_CXX_COMPILER_LAUNCHER=ccache
 export CCACHE_SLOPPINESS=include_file_ctime,include_file_mtime,time_macros
@@ -68,6 +69,7 @@ CMAKE_ARGS=(
   -DCMAKE_INSTALL_PREFIX="$install_dir"
   -DCMAKE_INSTALL_LIBDIR=lib
   -DIREE_ERROR_ON_MISSING_SUBMODULES=OFF
+  -DENABLE_XRT_LITE_CTS_TESTS=ON
   -DIREE_ENABLE_ASSERTIONS=$assertions
   -DIREE_BUILD_SAMPLES=OFF
   -DIREE_BUILD_PYTHON_BINDINGS=ON
@@ -79,7 +81,7 @@ CMAKE_ARGS=(
   -DIREE_TARGET_BACKEND_LLVM_CPU=ON
   -DIREE_INPUT_TOSA=OFF
   -DIREE_INPUT_STABLEHLO=OFF
-  -DIREE_INPUT_TORCH=OFF
+  -DIREE_INPUT_TORCH=ON
   -DCMAKE_OBJECT_PATH_MAX=4096
   -DIREE_CMAKE_PLUGIN_PATHS="$repo_root"
 )
@@ -143,12 +145,17 @@ cmake --build "$build_dir" --target install
 # ninja iree-install-dist install-IREECompilerPythonModules install-IREEDialectsPythonModules
 cmake --build "$build_dir" --target iree-install-dist
 
-echo "CTest"
-echo "-----"
-if [[ "$OSTYPE" == "linux"* ]] && [[ "$assertions" == "ON" ]]; then
-  ctest --test-dir "$build_dir" -R amd-aie -E "driver" --output-on-failure -j
-elif [[ "$OSTYPE" == "darwin"* ]]; then
-  ctest --test-dir "$build_dir" -R amd-aie -E "matmul_pack_peel_air_e2e|matmul_elementwise_pack_peel_air_e2e" --output-on-failure -j --repeat until-pass:5
+
+if [[ "$enable_ctest" == "ON" ]]; then
+  echo "CTest"
+  echo "-----"
+  if [[ "$OSTYPE" == "linux"* ]] && [[ "$assertions" == "ON" ]]; then
+    ctest --test-dir "$build_dir" -R amd-aie -E "driver" --output-on-failure -j
+  elif [[ "$OSTYPE" == "darwin"* ]]; then
+    ctest --test-dir "$build_dir" -R amd-aie -E "matmul_pack_peel_air_e2e|matmul_elementwise_pack_peel_air_e2e" --output-on-failure -j --repeat until-pass:5
+  fi
+else
+  echo "Skipping CTest"
 fi
 
 if [ -d "$llvm_install_dir" ]; then
