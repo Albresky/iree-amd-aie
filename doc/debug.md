@@ -206,8 +206,8 @@
 
 **报错内容**：
 
-```
 **libc_start_call_main.h**
+```
 Could not load source './csu/../sysdeps/nptl/libc_start_call_main.h': 'SourceRequest' not supported..
 ```
 
