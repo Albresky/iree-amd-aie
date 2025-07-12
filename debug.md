@@ -2,7 +2,7 @@
  * @Author: Albresky albre02@outlook.com
  * @Date: 2025-07-12 14:00:23
  * @LastEditors: Albresky albre02@outlook.com
- * @LastEditTime: 2025-07-12 14:46:00
+ * @LastEditTime: 2025-07-12 14:57:50
  * @FilePath: /iree-amd-aie/debug.md
  * @Description: IREE-AMD-AIE 项目端到端调试指南
 -->
@@ -198,3 +198,38 @@
         }
     ]
 }
+```
+
+## 4. 调试过程遇到的问题
+
+### 4.1 C++ 调试结束时报错
+
+**报错内容**：
+
+```
+**libc_start_call_main.h**
+Could not load source './csu/../sysdeps/nptl/libc_start_call_main.h': 'SourceRequest' not supported..
+```
+
+**原因**：这是因为 C++ 调试器在结束时尝试加载一些系统库的源代码，但这些源代码并不在当前工作目录下。
+
+**解决方法**：将 `cwd` 设置为 `glibc` 的源代码目录。（似乎不会影响 IREE项目的调试）
+
+- i. 安装 `glibc` 源代码：
+
+```bash
+apt-get install glibc-source
+```
+
+- ii. 解压 `glibc` 源代码：
+
+```bash
+cd /usr/src/glibc
+tar -xvf glibc-2.*.tar.xz
+```
+
+- iii. 在 `launch.json` 中添加或修改 `cwd`：
+
+```json
+"cwd": "/usr/src/glibc-2.31", // 替换为实际的 glibc 源代码目录
+``` 
