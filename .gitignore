@@ -7,7 +7,7 @@
 *-install/
 kernel-doc
 
-build*
+build_*
 *-build
 
 install*
