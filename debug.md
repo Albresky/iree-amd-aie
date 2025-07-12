@@ -2,7 +2,7 @@
  * @Author: Albresky albre02@outlook.com
  * @Date: 2025-07-12 14:00:23
  * @LastEditors: Albresky albre02@outlook.com
- * @LastEditTime: 2025-07-12 14:38:06
+ * @LastEditTime: 2025-07-12 14:46:00
  * @FilePath: /iree-amd-aie/debug.md
  * @Description: IREE-AMD-AIE 项目端到端调试指南
 -->
@@ -24,6 +24,8 @@
       * 这是面向用户的直接入口。当命令行输入 `iree-compile` 时，首先执行的是一个 Python 脚本。
       * **作用**: 这个脚本非常轻量，主要负责解析复杂的命令行参数，设置必要的环境变量，并定位核心的 C++ 编译器程序。
       * **对应源码**: `./iree-amd-aie/third_party/iree/compiler/bindings/python/iree/compiler/tools/scripts/iree_compile/__main__.py`
+
+> **[如何找到 Python 包装器的入口?]** 在工程根目录下搜索：`find . -type f -path "*/iree_compile/__main__.py"`， 这会列出所有包含该脚本的路径，在每个源码的开头打印当前源码文件的路径，然后重新运行调试器，观察输出的入口路径即可。
 
 2.  **子进程调用**:
 
@@ -70,7 +72,7 @@
         "request": "launch",
         "module": "iree.compiler.tools.scripts.iree_compile",
         "args": [
-            // 在这里放入您要调试的参数
+            // 在这里列出要调试的参数
             "--iree-hal-target-backends=amd-aie",
             "--compile-to=executable-targets",
             "--iree-amdaie-enable-ukernels=all",
