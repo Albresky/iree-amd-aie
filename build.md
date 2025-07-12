@@ -70,7 +70,7 @@ export llvm_install_dir=$PWD/llvm-install
 ## 5. Build IREE and run unit tests
 
 ```bash
-bash build_tools/build_test_cpp.sh ON
+bash build_tools/build_test_cpp.sh ON ON
 ```
 
 - Expected output:
